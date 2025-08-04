@@ -1,0 +1,22 @@
+{
+  "name": "youtube-monitor-railway",
+  "version": "2.6.2",
+  "description": "YouTube Monitor optimized for Railway deployment",
+  "main": "youtube-railway.js",
+  "scripts": {
+    "start": "node youtube-railway.js",
+    "dev": "node youtube-railway.js"
+  },
+  "dependencies": {
+    "puppeteer": "^21.0.0",
+    "puppeteer-cluster": "^0.23.0",
+    "@supabase/supabase-js": "^2.39.0",
+    "express": "^4.18.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": ["youtube", "monitor", "scraping", "railway"],
+  "author": "Sam",
+  "license": "MIT"
+}
