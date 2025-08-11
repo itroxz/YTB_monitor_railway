@@ -136,44 +136,82 @@ async function savePeakToSupabase(userId, lastViewers) {
 }
 
 const historicalBatch = [];
+let isFlushingHistorical = false;
 async function flushHistoricalBatch() {
+  if (isFlushingHistorical) return;
   if (historicalBatch.length === 0) return;
 
-  const batchToInsert = historicalBatch.slice(0, MAX_BATCH_SIZE);
-  historicalBatch.splice(0, batchToInsert.length);
+  isFlushingHistorical = true;
+  try {
+    while (historicalBatch.length > 0) {
+      const batchToInsert = historicalBatch.slice(0, MAX_BATCH_SIZE);
+      historicalBatch.splice(0, batchToInsert.length);
 
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    try {
-      const { error } = await supabase
-        .from('historical_data')
-        .insert(batchToInsert);
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+          const { error } = await supabase
+            .from('historical_data')
+            .insert(batchToInsert);
 
-      if (error) {
-        log('error', `Erro ao inserir batch (tentativa ${attempt})`, { error, batchSize: batchToInsert.length });
-        if (attempt === 2) {
-          log('error', 'Falha final ao inserir batch', { batchToInsert });
-        } else {
-          await new Promise((r) => setTimeout(r, 1000));
-          continue;
+          if (error) {
+            log('error', `Erro ao inserir batch (tentativa ${attempt})`, { error, batchSize: batchToInsert.length });
+            if (attempt === 2) {
+              log('error', 'Falha final ao inserir batch', { batchToInsert });
+            } else {
+              await new Promise((r) => setTimeout(r, 1000));
+              continue;
+            }
+          } else {
+            log('info', `Batch inserido com sucesso`, { recordCount: batchToInsert.length });
+            break;
+          }
+        } catch (err) {
+          log('error', `Exceção no flushHistoricalBatch (tentativa ${attempt})`, { error: err.message });
+          if (attempt === 2) {
+            log('error', 'Falha final no batch', { batchToInsert });
+          }
         }
-      } else {
-        log('info', `Batch inserido com sucesso`, { recordCount: batchToInsert.length });
-        break;
-      }
-    } catch (err) {
-      log('error', `Exceção no flushHistoricalBatch (tentativa ${attempt})`, { error: err.message });
-      if (attempt === 2) {
-        log('error', 'Falha final no batch', { batchToInsert });
       }
     }
-  }
 
-  if (historicalBatch.length > MAX_BATCH_BUFFER) {
-    log('warn', `Buffer histórico muito grande, limpando registros antigos`, { 
-      currentSize: historicalBatch.length, 
-      maxBuffer: MAX_BATCH_BUFFER 
+    if (historicalBatch.length > MAX_BATCH_BUFFER) {
+      log('warn', `Buffer histórico muito grande, limpando registros antigos`, {
+        currentSize: historicalBatch.length,
+        maxBuffer: MAX_BATCH_BUFFER
+      });
+      historicalBatch.splice(0, historicalBatch.length - MAX_BATCH_BUFFER);
+    }
+  } finally {
+    isFlushingHistorical = false;
+  }
+}
+
+// Otimiza rede do puppeteer para reduzir consumo sem afetar scraping
+async function optimizePageNetwork(page) {
+  try {
+    // Define timeouts por página
+    if (typeof page.setDefaultNavigationTimeout === 'function') {
+      page.setDefaultNavigationTimeout(TIMEOUT_GOTO_MS);
+    }
+    if (typeof page.setDefaultTimeout === 'function') {
+      page.setDefaultTimeout(TIMEOUT_GOTO_MS);
+    }
+
+    // Evita duplicar listeners
+    if (page._networkOptimized) return;
+    page._networkOptimized = true;
+
+    await page.setRequestInterception(true);
+    page.on('request', (req) => {
+      const type = req.resourceType();
+      // Bloqueia recursos pesados que não impactam o texto renderizado
+      if (type === 'image' || type === 'media' || type === 'font' || type === 'websocket') {
+        return req.abort();
+      }
+      return req.continue();
     });
-    historicalBatch.splice(0, historicalBatch.length - MAX_BATCH_BUFFER);
+  } catch (err) {
+    log('warn', 'Falha ao otimizar rede da página', { error: err.message });
   }
 }
 
@@ -438,6 +476,7 @@ async function runClusterMonitor() {
   });
 
   cluster.task(async ({ page, data }) => {
+  await optimizePageNetwork(page);
     await processChannel({
       page,
       data,
@@ -518,6 +557,12 @@ async function start() {
     });
   });
 
+  // Flush periódico para garantir persistência mesmo com baixo volume
+  const periodicFlushMs = Math.max(15_000, Math.min(120_000, parseInt(process.env.FLUSH_INTERVAL_MS || '30000')));
+  setInterval(() => {
+    flushHistoricalBatch().catch((e) => log('error', 'Erro no flush periódico', { error: e.message }));
+  }, periodicFlushMs);
+
   // Inicia o monitor principal
   log('info', 'Iniciando YouTube Monitor (Docker)', {
     environment: process.env.NODE_ENV || 'development',
@@ -546,14 +591,23 @@ process.on('uncaughtException', (error) => {
 });
 
 // Graceful shutdown
+async function gracefulShutdown(signal) {
+  try {
+    log('info', `${signal} recebido, iniciando shutdown gracioso`);
+    await flushHistoricalBatch();
+  } catch (e) {
+    log('warn', 'Erro durante shutdown gracioso', { error: e.message });
+  } finally {
+    process.exit(0);
+  }
+}
+
 process.on('SIGTERM', () => {
-  log('info', 'SIGTERM recebido, encerrando aplicação graciosamente');
-  process.exit(0);
+  gracefulShutdown('SIGTERM');
 });
 
 process.on('SIGINT', () => {
-  log('info', 'SIGINT recebido, encerrando aplicação graciosamente');
-  process.exit(0);
+  gracefulShutdown('SIGINT');
 });
 
 start();
