@@ -48,8 +48,12 @@ WORKDIR /app
 # Copiar package files primeiro para melhor cache
 COPY package*.json ./
 
-# Instalar dependências
-RUN npm ci --omit=dev --silent
+# Instalar dependências (usa ci se houver lockfile, senão install)
+RUN if [ -f package-lock.json ]; then \
+            npm ci --omit=dev --silent; \
+        else \
+            npm install --omit=dev --silent --no-audit --no-fund; \
+        fi
 
 # Copiar código da aplicação
 COPY . .
