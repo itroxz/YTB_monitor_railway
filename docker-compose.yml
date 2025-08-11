@@ -5,8 +5,24 @@ services:
       dockerfile: Dockerfile
     image: yt-monitor:latest
     container_name: yt-monitor
-    env_file:
-      - .env
+    environment:
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_KEY: ${SUPABASE_KEY}
+      NODE_ENV: ${NODE_ENV:-production}
+      LOOP_INTERVAL_MS: ${LOOP_INTERVAL_MS:-40000}
+      TIMEOUT_MS: ${TIMEOUT_MS:-60000}
+      MAX_FAILS: ${MAX_FAILS:-2}
+      BLOCK_OFFLINE_MS: ${BLOCK_OFFLINE_MS:-600000}
+      MAX_CONCURRENCY: ${MAX_CONCURRENCY:-3}
+      RETRY_LIMIT: ${RETRY_LIMIT:-2}
+      MAX_BATCH_SIZE: ${MAX_BATCH_SIZE:-50}
+      MAX_BATCH_BUFFER: ${MAX_BATCH_BUFFER:-200}
+      CACHE_TTL_MS: ${CACHE_TTL_MS:-30000}
+      MIN_UPDATE_INTERVAL_MS: ${MIN_UPDATE_INTERVAL_MS:-30000}
+      VIEWERS_CHANGE_THRESHOLD: ${VIEWERS_CHANGE_THRESHOLD:-0}
+      PORT: ${PORT:-3000}
+      # Optional: override Chrome path if needed
+      # CHROME_PATH: ${CHROME_PATH}
     ports:
       - "3000:3000"
     restart: unless-stopped
