@@ -37,6 +37,19 @@ const VIEWERS_CHANGE_THRESHOLD = parseFloat(process.env.VIEWERS_CHANGE_THRESHOLD
 // Ambiente
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
+// Monitor lifecycle state
+const monitor = {
+  state: 'stopped', // 'stopped' | 'starting' | 'running' | 'stopping'
+  stopRequested: false,
+  cluster: null,
+  loopPromise: null,
+  usersRefreshInterval: null,
+  lastError: null,
+  lastUserCount: 0,
+};
+
+function delay(ms) { return new Promise((r) => setTimeout(r, ms)); }
+
 function log(level, message, data = {}) {
   const timestamp = new Date().toISOString();
   const logEntry = {
@@ -434,7 +447,7 @@ async function processChannel({
 /************************************************************
  *  5. Função principal do cluster + loop                   *
  ************************************************************/
-async function runClusterMonitor() {
+async function runClusterMonitor(monitorRef) {
   let userIds = await fetchUsersFromSupabase();
   if (userIds.length === 0) {
     throw new Error('Nenhum alvo encontrado para monitorar.');
@@ -471,6 +484,9 @@ async function runClusterMonitor() {
     timeout: 3 * 60 * 1000,
   });
 
+  monitorRef.cluster = cluster;
+  monitorRef.state = 'running';
+
   cluster.on('taskerror', (err, data) => {
     log('error', `Erro na tarefa do cluster`, { userId: data, error: err.message });
   });
@@ -487,9 +503,11 @@ async function runClusterMonitor() {
   });
 
   // Atualização periódica da lista de usuários
-  setInterval(async () => {
+  if (monitorRef.usersRefreshInterval) clearInterval(monitorRef.usersRefreshInterval);
+  monitorRef.usersRefreshInterval = setInterval(async () => {
     try {
       userIds = await fetchUsersFromSupabase();
+      monitorRef.lastUserCount = userIds.length;
       log('info', 'Lista de alvos atualizada', { userCount: userIds.length });
     } catch (error) {
       log('error', 'Erro ao atualizar lista de alvos', { error: error.message });
@@ -502,12 +520,20 @@ async function runClusterMonitor() {
     loopInterval: WAIT_BETWEEN_FULL_LOOP_MS
   });
 
-  while (true) {
+  while (!monitorRef.stopRequested) {
     for (const userId of userIds) {
+      if (monitorRef.stopRequested) break;
       cluster.queue(userId);
     }
-    await new Promise((r) => setTimeout(r, WAIT_BETWEEN_FULL_LOOP_MS));
+    await delay(WAIT_BETWEEN_FULL_LOOP_MS);
   }
+
+  // Cleanup on stop
+  try { if (monitorRef.usersRefreshInterval) clearInterval(monitorRef.usersRefreshInterval); } catch {}
+  try { await cluster.idle(); } catch (e) { log('warn', 'Erro ao aguardar cluster idle', { error: e.message }); }
+  try { await cluster.close(); } catch (e) { log('warn', 'Erro ao fechar cluster', { error: e.message }); }
+  monitorRef.cluster = null;
+  monitorRef.state = 'stopped';
 }
 
 /************************************************************
@@ -563,21 +589,56 @@ async function start() {
     flushHistoricalBatch().catch((e) => log('error', 'Erro no flush periódico', { error: e.message }));
   }, periodicFlushMs);
 
-  // Inicia o monitor principal
-  log('info', 'Iniciando YouTube Monitor (Docker)', {
-    environment: process.env.NODE_ENV || 'development',
-    maxConcurrency: MAX_CONCURRENCY,
-    loopInterval: WAIT_BETWEEN_FULL_LOOP_MS
+  // Controle de autenticação opcional para endpoints de controle
+  function authIfConfigured(req, res, next) {
+    const token = process.env.CONTROL_TOKEN;
+    if (!token) return next();
+    const auth = req.headers['authorization'] || '';
+    const provided = auth.startsWith('Bearer ') ? auth.slice(7) : (req.query.token || req.body?.token);
+    if (provided === token) return next();
+    return res.status(401).json({ error: 'unauthorized' });
+  }
+
+  // Endpoints de controle
+  app.get('/control/status', authIfConfigured, (req, res) => {
+    res.json({
+      state: monitor.state,
+      running: monitor.state === 'running',
+      lastError: monitor.lastError,
+      lastUserCount: monitor.lastUserCount,
+      timestamp: new Date().toISOString(),
+    });
   });
 
-  while (true) {
-    try {
-      await runClusterMonitor();
-    } catch (error) {
-      log('error', 'Erro no monitor principal, reiniciando em 40s', { error: error.message });
-      await new Promise((r) => setTimeout(r, 40000));
+  app.post('/control/start', authIfConfigured, async (req, res) => {
+    if (monitor.state === 'running' || monitor.state === 'starting') {
+      return res.status(200).json({ status: 'already running' });
     }
-  }
+    try {
+      await monitorStart();
+      return res.status(200).json({ status: 'started' });
+    } catch (e) {
+      return res.status(500).json({ status: 'error', error: e.message });
+    }
+  });
+
+  app.post('/control/stop', authIfConfigured, async (req, res) => {
+    if (monitor.state === 'stopped' || monitor.state === 'stopping') {
+      return res.status(200).json({ status: 'already stopped' });
+    }
+    try {
+      await monitorStop();
+      return res.status(200).json({ status: 'stopped' });
+    } catch (e) {
+      return res.status(500).json({ status: 'error', error: e.message });
+    }
+  });
+
+  // Auto-start para manter comportamento atual
+  monitorStart().catch((e) => {
+    monitor.lastError = e.message;
+    log('error', 'Falha ao iniciar monitor automaticamente', { error: e.message });
+  });
 }
 
 // Tratamento de erros global
@@ -611,3 +672,43 @@ process.on('SIGINT', () => {
 });
 
 start();
+
+// Gerenciador: iniciar/parar
+async function monitorStart() {
+  if (monitor.state === 'running' || monitor.state === 'starting') return;
+  monitor.state = 'starting';
+  monitor.stopRequested = false;
+  monitor.lastError = null;
+  monitor.loopPromise = (async () => {
+    while (!monitor.stopRequested) {
+      try {
+        await runClusterMonitor(monitor);
+        if (monitor.stopRequested) break;
+        // Se saiu sem stop, é porque houve uma conclusão inesperada
+        await delay(5_000);
+      } catch (error) {
+        monitor.lastError = error?.message || String(error);
+        if (monitor.stopRequested) break;
+        log('error', 'Erro no monitor principal, reiniciando em 40s', { error: monitor.lastError });
+        await delay(40_000);
+      }
+    }
+  })();
+}
+
+async function monitorStop() {
+  if (monitor.state === 'stopped' || monitor.state === 'stopping') return;
+  monitor.state = 'stopping';
+  monitor.stopRequested = true;
+  try {
+    await monitor.loopPromise;
+  } catch (e) {
+    log('warn', 'Erro ao aguardar loop principal encerrar', { error: e.message });
+  }
+  try {
+    await flushHistoricalBatch();
+  } catch (e) {
+    log('warn', 'Erro ao flush na parada', { error: e.message });
+  }
+  monitor.state = 'stopped';
+}
