@@ -1,6 +1,6 @@
 # YouTube Monitor - Docker
 
-Este projeto roda um monitor de lives do YouTube com Puppeteer e persiste dados no Supabase. Agora está preparado para rodar apenas com Docker (sem Railway).
+Projeto para monitorar visualizações de lives do YouTube com Puppeteer, salvando métricas no Supabase. Esta versão roda apenas com Docker (sem Railway).
 
 ## Variáveis de Ambiente
 
@@ -64,7 +64,7 @@ Endpoints:
 YTB_Live/
 ├── Dockerfile
 ├── package.json
-├── app.js                # entrypoint
+├── app.js                # entrypoint (carrega youtube-railway.js)
 ├── youtube-railway.js    # implementação (genérica p/ Docker)
 ├── youtube.5.js          # versão original
 ├── .env.example

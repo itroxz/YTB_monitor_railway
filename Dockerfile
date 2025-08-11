@@ -1,4 +1,4 @@
-# Railway Dockerfile otimizado para Puppeteer
+# Dockerfile otimizado para Puppeteer/Chromium
 FROM node:20-slim
 
 # Instalar dependências do sistema necessárias para Chromium/Puppeteer
