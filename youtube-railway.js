@@ -34,8 +34,7 @@ const PORT = parseInt(process.env.PORT) || 3000; // Railway usa PORT
 const MIN_UPDATE_INTERVAL_MS = parseInt(process.env.MIN_UPDATE_INTERVAL_MS) || (30 * 1000);
 const VIEWERS_CHANGE_THRESHOLD = parseFloat(process.env.VIEWERS_CHANGE_THRESHOLD) || 0;
 
-// Configurações específicas do Railway
-const IS_RAILWAY = process.env.RAILWAY_ENVIRONMENT_NAME !== undefined;
+// Ambiente
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
 function log(level, message, data = {}) {
@@ -421,8 +420,8 @@ async function runClusterMonitor() {
     ],
   };
 
-  // No Railway, o Puppeteer geralmente já vem com o Chrome incluído
-  if (!IS_RAILWAY) {
+  // Permite override do path do Chrome via env quando necessário
+  if (process.env.CHROME_PATH) {
     puppeteerOptions.executablePath = process.env.CHROME_PATH;
   }
 
@@ -481,13 +480,12 @@ async function start() {
   // Middleware básico
   app.use(express.json());
   
-  // Health check endpoint
   app.get('/health', (req, res) => {
     res.status(200).json({
       status: 'OK',
       timestamp: new Date().toISOString(),
       environment: process.env.NODE_ENV || 'development',
-      isRailway: IS_RAILWAY,
+  isRailway: process.env.RAILWAY_ENVIRONMENT_NAME !== undefined,
       uptime: process.uptime()
     });
   });
@@ -521,9 +519,8 @@ async function start() {
   });
 
   // Inicia o monitor principal
-  log('info', 'Iniciando YouTube Monitor para Railway', {
+  log('info', 'Iniciando YouTube Monitor (Docker)', {
     environment: process.env.NODE_ENV || 'development',
-    isRailway: IS_RAILWAY,
     maxConcurrency: MAX_CONCURRENCY,
     loopInterval: WAIT_BETWEEN_FULL_LOOP_MS
   });

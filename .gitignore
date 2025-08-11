@@ -89,5 +89,6 @@ Thumbs.db
 ehthumbs.db
 Desktop.ini
 
-# Railway
-.railway/
+# Docker
+.dockerignore
+*.tar

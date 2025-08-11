@@ -1,11 +1,11 @@
 {
-  "name": "youtube-monitor-railway",
-  "version": "2.6.3",
-  "description": "YouTube Monitor optimized for Railway deployment",
-  "main": "youtube-railway.js",
+  "name": "youtube-monitor-docker",
+  "version": "2.6.4",
+  "description": "YouTube Monitor optimized for Docker",
+  "main": "app.js",
   "scripts": {
-    "start": "node youtube-railway.js",
-    "dev": "node youtube-railway.js",
+    "start": "node app.js",
+    "dev": "node app.js",
     "build": "echo 'No build step required'",
     "postinstall": "echo 'Dependencies installed successfully'"
   },
@@ -19,7 +19,7 @@
     "node": ">=18.0.0",
     "npm": ">=8.0.0"
   },
-  "keywords": ["youtube", "monitor", "scraping", "railway"],
+  "keywords": ["youtube", "monitor", "scraping", "docker"],
   "author": "Sam",
   "license": "MIT"
 }
