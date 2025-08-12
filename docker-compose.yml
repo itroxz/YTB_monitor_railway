@@ -20,10 +20,10 @@ services:
       CACHE_TTL_MS: ${CACHE_TTL_MS:-30000}
       MIN_UPDATE_INTERVAL_MS: ${MIN_UPDATE_INTERVAL_MS:-30000}
       VIEWERS_CHANGE_THRESHOLD: ${VIEWERS_CHANGE_THRESHOLD:-0}
-      PORT: ${PORT:-3000}
+      PORT: ${PORT:-3010}
       # Optional: override Chrome path if needed
       # CHROME_PATH: ${CHROME_PATH}
     ports:
-      - "3000:3000"
+      - "3010:3010"
     restart: unless-stopped
     shm_size: "1gb"

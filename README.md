@@ -26,7 +26,7 @@ MAX_BATCH_BUFFER=200
 CACHE_TTL_MS=30000
 MIN_UPDATE_INTERVAL_MS=30000
 VIEWERS_CHANGE_THRESHOLD=0
-PORT=3000
+PORT=3010
 ```
 
 ## Como rodar com Docker
@@ -38,7 +38,7 @@ docker build -t yt-monitor .
 
 Executar o container (Linux/Mac/WSL):
 ```bash
-docker run --rm -p 3000:3000 \
+docker run --rm -p 3010:3010 \
 	-e SUPABASE_URL=... \
 	-e SUPABASE_KEY=... \
 	-e NODE_ENV=production \
@@ -47,7 +47,7 @@ docker run --rm -p 3000:3000 \
 
 Executar o container (Windows PowerShell):
 ```powershell
-docker run --rm -p 3000:3000 `
+docker run --rm -p 3010:3010 `
 	-e SUPABASE_URL=... `
 	-e SUPABASE_KEY=... `
 	-e NODE_ENV=production `
@@ -55,8 +55,8 @@ docker run --rm -p 3000:3000 `
 ```
 
 Endpoints:
-- GET http://localhost:3000/health
-- GET http://localhost:3000/status
+- GET http://localhost:3010/health
+- GET http://localhost:3010/status
 
 ## Estrutura do Projeto
 

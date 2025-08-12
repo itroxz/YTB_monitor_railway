@@ -30,7 +30,8 @@ const RETRY_LIMIT = parseInt(process.env.RETRY_LIMIT) || 2;
 const MAX_BATCH_SIZE = parseInt(process.env.MAX_BATCH_SIZE) || 50;
 const MAX_BATCH_BUFFER = parseInt(process.env.MAX_BATCH_BUFFER) || 200;
 const CACHE_TTL_MS = parseInt(process.env.CACHE_TTL_MS) || (30 * 1000);
-const PORT = parseInt(process.env.PORT) || 3000; // Railway usa PORT
+const PORT = parseInt(process.env.PORT) || 3010; // Default port
+const HOST = process.env.HOST || '0.0.0.0'; // Bind to all interfaces for external access
 const MIN_UPDATE_INTERVAL_MS = parseInt(process.env.MIN_UPDATE_INTERVAL_MS) || (30 * 1000);
 const VIEWERS_CHANGE_THRESHOLD = parseFloat(process.env.VIEWERS_CHANGE_THRESHOLD) || 0;
 
@@ -526,6 +527,18 @@ async function start() {
   
   // Middleware básico
   app.use(express.json());
+  // Confiar em proxy (X-Forwarded-For) quando atrás de Nginx/Traefik
+  app.set('trust proxy', 1);
+
+  // CORS básico para acesso externo (pode ajustar via CORS_ORIGIN)
+  app.use((req, res, next) => {
+    const origin = process.env.CORS_ORIGIN || '*';
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    if (req.method === 'OPTIONS') return res.sendStatus(204);
+    next();
+  });
   
   app.get('/health', (req, res) => {
     res.status(200).json({
@@ -557,9 +570,10 @@ async function start() {
   });
 
   // Inicia o servidor
-  app.listen(PORT, () => {
+  app.listen(PORT, HOST, () => {
     log('info', 'Servidor HTTP iniciado', { 
       port: PORT,
+      host: HOST,
       healthEndpoint: `/health`,
       statusEndpoint: `/status`
     });
