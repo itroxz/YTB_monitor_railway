@@ -54,9 +54,84 @@ docker run --rm -p 3010:3010 `
 	yt-monitor
 ```
 
-Endpoints:
-- GET http://localhost:3010/health
-- GET http://localhost:3010/status
+## API
+
+Base URL: http://localhost:3010
+
+Auth (opcional): defina CONTROL_TOKEN e envie como:
+- Header: `Authorization: Bearer <token>`
+- Ou `?token=<token>` na query/body
+
+Endpoints
+- GET /health
+	- 200
+	- Exemplo:
+```json
+{
+	"status": "OK",
+	"timestamp": "2025-08-12T12:34:56.789Z",
+	"environment": "production",
+	"isRailway": false,
+	"uptime": 123.45
+}
+```
+
+- GET /status
+	- 200
+	- Exemplo:
+```json
+{
+	"status": "running",
+	"userCount": 3,
+	"users": ["UCxxxx", "UCyyyy", "UCzzzz"],
+	"timestamp": "2025-08-12T12:34:56.789Z"
+}
+```
+
+- GET /control/status
+	- 200
+	- Exemplo:
+```json
+{
+	"state": "running",
+	"running": true,
+	"lastError": null,
+	"lastUserCount": 3,
+	"timestamp": "2025-08-12T12:34:56.789Z"
+}
+```
+
+- POST /control/start
+	- 200: `{ "status": "started" }` ou `{ "status": "already running" }`
+	- 500 em erro
+
+- POST /control/stop
+	- 200: `{ "status": "stopped" }` ou `{ "status": "already stopped" }`
+	- 500 em erro
+
+- POST /control/restart (alias: /control/reset)
+	- 200: `{ "status": "restarted" }`
+	- 500 em erro
+
+Erros comuns
+- 401 Unauthorized quando `CONTROL_TOKEN` estiver configurado e não for enviado/for inválido.
+
+Exemplos (PowerShell)
+```powershell
+# Health
+curl http://localhost:3010/health
+
+# Status do monitor
+curl http://localhost:3010/control/status
+
+# Start/Stop/Restart
+curl -Method POST http://localhost:3010/control/start
+curl -Method POST http://localhost:3010/control/stop
+curl -Method POST http://localhost:3010/control/restart
+
+# Com token
+curl -Headers @{ Authorization = 'Bearer <TOKEN>' } http://localhost:3010/control/status
+```
 
 ## Estrutura do Projeto
 
