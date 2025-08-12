@@ -27,6 +27,12 @@ CACHE_TTL_MS=30000
 MIN_UPDATE_INTERVAL_MS=30000
 VIEWERS_CHANGE_THRESHOLD=0
 PORT=3010
+## CORS (opcional)
+## CORS_ORIGIN=*                          # ou lista: https://site1.com,https://app.site2.com
+## CORS_CREDENTIALS=false                 # true para permitir cookies/credenciais
+## CORS_METHODS=GET,POST,OPTIONS
+## CORS_HEADERS=Content-Type, Authorization, X-Requested-With
+## CORS_MAX_AGE=600
 ```
 
 ## Como rodar com Docker

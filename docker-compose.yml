@@ -21,6 +21,12 @@ services:
       MIN_UPDATE_INTERVAL_MS: ${MIN_UPDATE_INTERVAL_MS:-30000}
       VIEWERS_CHANGE_THRESHOLD: ${VIEWERS_CHANGE_THRESHOLD:-0}
       PORT: ${PORT:-3010}
+      # CORS configuration (optional)
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+      CORS_CREDENTIALS: ${CORS_CREDENTIALS:-false}
+      CORS_METHODS: ${CORS_METHODS:-GET,POST,OPTIONS}
+      CORS_HEADERS: ${CORS_HEADERS:-Content-Type, Authorization, X-Requested-With}
+      CORS_MAX_AGE: ${CORS_MAX_AGE:-600}
       # Optional: override Chrome path if needed
       # CHROME_PATH: ${CHROME_PATH}
     ports:
