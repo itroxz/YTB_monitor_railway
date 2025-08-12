@@ -47,6 +47,13 @@ const monitor = {
   usersRefreshInterval: null,
   lastError: null,
   lastUserCount: 0,
+  // observability
+  startCount: 0,
+  stopCount: 0,
+  restartCount: 0,
+  lastStartAt: null,
+  lastStopAt: null,
+  lastRestartAt: null,
 };
 
 function delay(ms) { return new Promise((r) => setTimeout(r, ms)); }
@@ -602,6 +609,12 @@ async function start() {
       running: monitor.state === 'running',
       lastError: monitor.lastError,
       lastUserCount: monitor.lastUserCount,
+  startCount: monitor.startCount,
+  stopCount: monitor.stopCount,
+  restartCount: monitor.restartCount,
+  lastStartAt: monitor.lastStartAt,
+  lastStopAt: monitor.lastStopAt,
+  lastRestartAt: monitor.lastRestartAt,
       timestamp: new Date().toISOString(),
     });
   });
@@ -638,13 +651,21 @@ async function start() {
       // segue mesmo se falhar parada
       log('warn', 'Falha ao parar durante restart', { error: e.message });
     }
-    await monitorStart();
+  await monitorStart();
+  monitor.lastRestartAt = new Date().toISOString();
+  monitor.restartCount += 1;
+  log('info', 'Monitor restarted', { restartCount: monitor.restartCount });
   }
 
   app.post('/control/restart', authIfConfigured, async (req, res) => {
     try {
       await doRestart();
-      return res.status(200).json({ status: 'restarted' });
+      return res.status(200).json({ 
+        status: 'restarted',
+        restartCount: monitor.restartCount,
+        lastRestartAt: monitor.lastRestartAt,
+        state: monitor.state
+      });
     } catch (e) {
       return res.status(500).json({ status: 'error', error: e.message });
     }
@@ -653,7 +674,12 @@ async function start() {
   app.post('/control/reset', authIfConfigured, async (req, res) => {
     try {
       await doRestart();
-      return res.status(200).json({ status: 'restarted' });
+      return res.status(200).json({ 
+        status: 'restarted',
+        restartCount: monitor.restartCount,
+        lastRestartAt: monitor.lastRestartAt,
+        state: monitor.state
+      });
     } catch (e) {
       return res.status(500).json({ status: 'error', error: e.message });
     }
@@ -704,6 +730,9 @@ async function monitorStart() {
   monitor.state = 'starting';
   monitor.stopRequested = false;
   monitor.lastError = null;
+  monitor.lastStartAt = new Date().toISOString();
+  monitor.startCount += 1;
+  log('info', 'Monitor starting', { startCount: monitor.startCount });
   monitor.loopPromise = (async () => {
     while (!monitor.stopRequested) {
       try {
@@ -725,6 +754,9 @@ async function monitorStop() {
   if (monitor.state === 'stopped' || monitor.state === 'stopping') return;
   monitor.state = 'stopping';
   monitor.stopRequested = true;
+  monitor.lastStopAt = new Date().toISOString();
+  monitor.stopCount += 1;
+  log('info', 'Monitor stopping', { stopCount: monitor.stopCount });
   try {
     await monitor.loopPromise;
   } catch (e) {
@@ -736,4 +768,5 @@ async function monitorStop() {
     log('warn', 'Erro ao flush na parada', { error: e.message });
   }
   monitor.state = 'stopped';
+  log('info', 'Monitor stopped');
 }
