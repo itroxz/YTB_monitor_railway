@@ -630,6 +630,35 @@ async function start() {
     }
   });
 
+  // Reinicia o monitor (stop -> start). Alias: /control/reset
+  async function doRestart() {
+    try {
+      await monitorStop();
+    } catch (e) {
+      // segue mesmo se falhar parada
+      log('warn', 'Falha ao parar durante restart', { error: e.message });
+    }
+    await monitorStart();
+  }
+
+  app.post('/control/restart', authIfConfigured, async (req, res) => {
+    try {
+      await doRestart();
+      return res.status(200).json({ status: 'restarted' });
+    } catch (e) {
+      return res.status(500).json({ status: 'error', error: e.message });
+    }
+  });
+
+  app.post('/control/reset', authIfConfigured, async (req, res) => {
+    try {
+      await doRestart();
+      return res.status(200).json({ status: 'restarted' });
+    } catch (e) {
+      return res.status(500).json({ status: 'error', error: e.message });
+    }
+  });
+
   // Auto-start para manter comportamento atual
   monitorStart().catch((e) => {
     monitor.lastError = e.message;
